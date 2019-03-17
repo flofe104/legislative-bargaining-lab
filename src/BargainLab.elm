@@ -26,10 +26,11 @@ module BargainLab exposing
     )
 
 import Base64
+import Browser
 import Coalitions exposing (..)
 import Dict
 import GAMS
-import Games exposing (Game(..), gameDecoder, gameDefinition, games)
+import Games exposing (Game(..), gameDecoder, gameDefinition, games, showPlainGame)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (on, onClick, onInput, targetValue)
@@ -43,10 +44,10 @@ import SimpleGame exposing (..)
 import Vector exposing (toList)
 
 
-main : Program Never Model Msg
+main : Program () Model Msg
 main =
-    program
-        { init = init
+    Browser.element
+        { init = \_ -> init
         , view = view
         , update = update
         , subscriptions = subscriptions
@@ -119,7 +120,7 @@ update msg model =
                     ( model, Random.generate Probs (Probabilities.probsDiagGen q.vars) )
 
                 Nothing ->
-                    Debug.crash ""
+                    Debug.todo ""
 
         Probs fs ->
             ( { model | probs = fs }, Cmd.none )
@@ -183,7 +184,7 @@ gameOptions =
 
 gameOption : Game -> Html Msg
 gameOption game =
-    option [ value (toString game) ] [ text (Games.showGame game) ]
+    option [ value (showPlainGame game) ] [ text (Games.showGame game) ]
 
 
 view : Model -> Html Msg
@@ -208,7 +209,7 @@ viewSize : Model -> Html Msg
 viewSize model =
     div []
         [ text "QOBDD nodes: "
-        , text (Maybe.withDefault "no size available" (Maybe.map (toString << QOBDD.size) model.qobdd))
+        , text (Maybe.withDefault "no size available" (Maybe.map (String.fromInt << QOBDD.size) model.qobdd))
         ]
 
 
@@ -216,7 +217,7 @@ viewCoalisions : Model -> Html Msg
 viewCoalisions model =
     div []
         [ text "Coalisions: "
-        , text (Maybe.withDefault "number of coalisions not available" (Maybe.map (toString << QOBDD.coalitions) model.qobdd))
+        , text (Maybe.withDefault "number of coalisions not available" (Maybe.map (String.fromFloat << QOBDD.coalitions) model.qobdd))
         ]
 
 
@@ -239,7 +240,7 @@ viewFiles files =
         viewFile file =
             div []
                 [ a
-                    [ downloadAs file.name
+                    [ download file.name
                     , hrefDownload file.content
                     ]
                     [ text file.name ]
@@ -267,14 +268,14 @@ viewProbs probs =
 viewProbsRow : Int -> List Float -> Html a
 viewProbsRow i probs =
     div []
-        (text ("Player " ++ toString i ++ ": ")
+        (text ("Player " ++ String.fromInt i ++ ": ")
             :: [ text (String.concat (List.intersperse ", " (List.map viewProb probs))) ]
         )
 
 
 viewProb : Float -> String
 viewProb f =
-    toString f
+    String.fromFloat f
 
 
 viewPowerList : Model -> Html Msg
@@ -287,7 +288,7 @@ viewPowerListQOBDD : QOBDD -> List (List Float) -> Html Msg
 viewPowerListQOBDD qobdd probs =
     let
         probDicts =
-            List.map (\ps -> Dict.fromList (List.indexedMap (\i p -> ( i, p )) ps)) probs
+            List.map (\ps2 -> Dict.fromList (List.indexedMap (\i p -> ( i, p )) ps2)) probs
 
         ps =
             Probabilities.probs probDicts qobdd
@@ -297,9 +298,9 @@ viewPowerListQOBDD qobdd probs =
 
 viewPower : Int -> Float -> Html Msg
 viewPower player prob =
-    div [] [ text ("Power of player " ++ toString player ++ ": " ++ toString prob) ]
+    div [] [ text ("Power of player " ++ String.fromInt player ++ ": " ++ String.fromFloat prob) ]
 
 
-viewResult : Maybe QOBDD -> (BDD -> a) -> Html Msg
-viewResult mqobdd f =
-    div [] [ text (Maybe.withDefault "no result" (Maybe.map (toString << f << .bdd) mqobdd)) ]
+viewResult : Maybe QOBDD -> (BDD -> a) -> (a -> String) -> Html Msg
+viewResult mqobdd f g =
+    div [] [ text (Maybe.withDefault "no result" (Maybe.map (g << f << .bdd) mqobdd)) ]

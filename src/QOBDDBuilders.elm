@@ -214,7 +214,7 @@ joinTree jTree players rules =
     case jTree of
         Var str ->
             case String.toInt str of
-                Ok ruleid ->
+                Just ruleid ->
                     case List.drop (ruleid - 1) rules of
                         r :: rs ->
                             Just (build r players)
@@ -222,7 +222,7 @@ joinTree jTree players rules =
                         _ ->
                             Nothing
 
-                Err _ ->
+                Nothing ->
                     Nothing
 
         BinOp op tree1 tree2 ->

@@ -143,7 +143,7 @@ defaultJoinTree rules mJoinTree =
                     Var "0"
 
                 _ :: rs ->
-                    foldl (BinOp And) (Var "0") (List.map (Var << toString) (List.range 1 (List.length rs)))
+                    foldl (BinOp And) (Var "0") (List.map (Var << String.fromInt) (List.range 1 (List.length rs)))
 
 
 port parseSimpleGame : String -> Cmd msg
@@ -163,5 +163,5 @@ parsedSimpleGame f =
                     f (cleanSimpleGame r)
 
                 Err _ ->
-                    Debug.crash "Parse error"
+                    Debug.todo "Parse error"
         )

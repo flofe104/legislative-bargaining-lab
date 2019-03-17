@@ -133,12 +133,12 @@ nodeId bdd =
 
 prettyQOBDD : QOBDD -> String
 prettyQOBDD qobdd =
-    "{ " ++ toString qobdd.vars ++ ", " ++ pretty qobdd.bdd ++ " }"
+    "{ " ++ String.fromInt qobdd.vars ++ ", " ++ pretty qobdd.bdd ++ " }"
 
 
 pretty : BDD -> String
-pretty bdd =
-    case bdd of
+pretty bdd2 =
+    case bdd2 of
         Zero ->
             "Zero"
 
@@ -146,15 +146,15 @@ pretty bdd =
             "One"
 
         Ref { id, bdd } ->
-            "(Ref " ++ toString id ++ ")"
+            "(Ref " ++ String.fromInt id ++ ")"
 
         Node { id, thenB, var, elseB } ->
-            "(Node " ++ pretty thenB ++ " " ++ toString var ++ " " ++ pretty elseB ++ " ID:" ++ toString id ++ ")"
+            "(Node " ++ pretty thenB ++ " " ++ String.fromInt var ++ " " ++ pretty elseB ++ " ID:" ++ String.fromInt id ++ ")"
 
 
 foldBDD : b -> b -> (NodeId -> (() -> b) -> b) -> (NodeId -> b -> PlayerId -> b -> b) -> BDD -> b
-foldBDD zero one ref node bdd =
-    case bdd of
+foldBDD zero one ref node bdd2 =
+    case bdd2 of
         Zero ->
             zero
 
@@ -162,7 +162,7 @@ foldBDD zero one ref node bdd =
             one
 
         Ref { id, bdd } ->
-            ref id (\() -> foldBDD zero one ref node bdd)
+            ref id (\() -> foldBDD zero one ref node bdd2)
 
         Node { id, thenB, var, elseB } ->
             node id (foldBDD zero one ref node thenB) var (foldBDD zero one ref node elseB)
@@ -206,7 +206,7 @@ unsafeGet : NodeId -> Dict NodeId a -> a
 unsafeGet i dict =
     case Dict.get i dict of
         Nothing ->
-            Debug.crash (error i dict)
+            Debug.todo (error i dict)
 
         Just v ->
             v
@@ -219,7 +219,7 @@ foldBDDShare zero one node tree =
 
 error : Int -> Dict NodeId b -> String
 error i dict =
-    "Ref " ++ toString i ++ " missing\n" ++ toString dict
+    "Ref " ++ Debug.toString i ++ " missing\n" ++ Debug.toString dict
 
 
 foldQOBDD : b -> b -> (Int -> (() -> b) -> b) -> (Int -> b -> PlayerId -> b -> b) -> QOBDD -> b
@@ -258,8 +258,8 @@ coalitions qobdd =
     foldQOBDDShare 0 (2 ^ toFloat qobdd.vars) (\ft _ fe -> (ft + fe) / 2) qobdd
 
 
-leaf : Dict Int BDD -> Float -> Int -> Json.Decoder ( Dict Int BDD, BDD )
-leaf dict f v =
+buildLeaf : Dict Int BDD -> Float -> Int -> Json.Decoder ( Dict Int BDD, BDD )
+buildLeaf dict f v =
     if isInfinite f then
         Json.succeed
             ( dict
@@ -274,8 +274,8 @@ leaf dict f v =
         Json.fail "no leaf"
 
 
-node : Float -> Int -> BDD -> BDD -> Dict Int BDD -> ( Dict Int BDD, BDD )
-node var id t e dict =
+buildNode : Float -> Int -> BDD -> BDD -> Dict Int BDD -> ( Dict Int BDD, BDD )
+buildNode var id t e dict =
     case Dict.get id dict of
         Just node ->
             ( dict, node )
@@ -298,7 +298,7 @@ treeDecoderList l =
     Json.oneOf
         [ Json.andThen
             (\v ->
-                Json.andThen (\f -> leaf l f v) (Json.field "label" Json.float)
+                Json.andThen (\f -> buildLeaf l f v) (Json.field "label" Json.float)
             )
             (Json.field "value" Json.int)
         , Json.andThen
@@ -307,7 +307,7 @@ treeDecoderList l =
                     (\id ->
                         Json.andThen
                             (\( l1, t ) ->
-                                Json.map (\( dict, e ) -> node label id t e dict)
+                                Json.map (\( dict, e ) -> buildNode label id t e dict)
                                     (Json.field "e" (Json.lazy (\_ -> treeDecoderList l1)))
                             )
                             (Json.field "t" (Json.lazy (\_ -> treeDecoderList l)))
@@ -333,5 +333,5 @@ parsedMWVG f =
                     f r
 
                 Err _ ->
-                    Debug.crash "Parse error"
+                    Debug.todo "Parse error"
         )
