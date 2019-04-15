@@ -151,11 +151,31 @@ jointest =
 #
 #
 %join 1 OR 2
-3 3
-2 3 A
-1 1 B
-1 1 C
+1 1
+0 1 A
+0 0 B
 """
+
+
+
+{-
+   QOBDDS differ:
+   %join 1 OR 2
+   1 1
+   0 1 A
+   1 0 B
+   But dont differ here:
+   %join 1 OR 2
+   1 1
+   1 0 A
+   0 1 B
+
+   Old parsing failed:
+   %join 1 OR 2
+   1 1
+   1 1 A
+   1 1 B
+-}
 
 
 henningTest =
