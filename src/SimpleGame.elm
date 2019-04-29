@@ -30,7 +30,7 @@ type Op
 
 
 type JoinTree
-    = Var String
+    = Var String --string is ruleId
     | BinOp Op JoinTree JoinTree
 
 
