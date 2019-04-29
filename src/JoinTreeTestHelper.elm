@@ -1,4 +1,4 @@
-module JoinTreeTestHelper exposing (displayMerge, failingGame, simpleGame, wrongPart1, wrongPart2)
+module JoinTreeTestHelper exposing (displayMerge, mergeCorrectIdGame, mergeToRefGame, simpleGame, wrongPart1, wrongPart2)
 
 import BargainLab exposing (..)
 import Dict exposing (Dict)
@@ -37,9 +37,14 @@ wrongPart2 =
     SimpleGame 2 [ RuleMVG 0 [ 0, 1 ] ] 1 [ Player "a" 0, Player "b" 1 ] (Var "1")
 
 
-failingGame : SimpleGame
-failingGame =
+mergeToRefGame : SimpleGame
+mergeToRefGame =
     SimpleGame 2 [ RuleMVG 1 [ 1, 0 ], RuleMVG 0 [ 0, 1 ] ] 2 [ Player "a" 0, Player "b" 1 ] (BinOp Or (Var "1") (Var "2"))
+
+
+mergeCorrectIdGame : SimpleGame
+mergeCorrectIdGame =
+    SimpleGame 2 [ RuleMVG 1 [ 0, 0 ], RuleMVG 1 [ 1, 0 ] ] 2 [ Player "a" 0, Player "b" 1 ] (BinOp Or (Var "1") (Var "2"))
 
 
 simpleGame : SimpleGame

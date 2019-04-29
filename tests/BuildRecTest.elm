@@ -1,4 +1,4 @@
-module Example exposing (empty, simple)
+module BuildRecTest exposing (empty, simple)
 
 import BargainLab exposing (..)
 import Dict exposing (Dict)
@@ -15,9 +15,9 @@ empty =
     describe "empty game"
         [ describe "empty"
             [ test "losing" <|
-                \_ -> Expect.equal (buildRec 0 1 [] [] Dict.empty) ( 0, NInfo Zero 0 (1 / 0), Dict.empty )
+                \_ -> Expect.equal (buildRec 0 1 [] [] Dict.empty) ( 0, NInfo Zero 0 inf, Dict.empty )
             , test "winning" <|
-                \_ -> Expect.equal (buildRec 0 0 [] [] Dict.empty) ( 0, NInfo One (-1 / 0) 0, Dict.empty )
+                \_ -> Expect.equal (buildRec 0 0 [] [] Dict.empty) ( 0, NInfo One ninf 0, Dict.empty )
             ]
         ]
 
