@@ -134,77 +134,84 @@ insert :
     -> BDD
     -> Dict ( NodeId, NodeId, Int ) BDD
     -> Dict ( NodeId, NodeId, Int ) BDD
-insert ( node1, node2, op ) bdd dict =
-    Dict.insert ( node1, node2, op2Int op ) bdd dict
+insert ( node1, node2, op ) bdd =
+    Dict.insert ( node1, node2, op2Int op ) bdd
+
+
+mergeBDDs : Int -> BDD -> BDD -> Op -> Dict ( NodeId, NodeId, Int ) BDD -> ( BDD, Dict ( NodeId, NodeId, Int ) BDD, Int )
+mergeBDDs nodeId tree1 tree2 op dict1 =
+    let
+        applyNonRefs a b dict =
+            let
+                ( lBdd, dict2, nodeId2 ) =
+                    mergeBDDs nodeId a.thenB b.thenB op dict
+
+                ( rBdd, dict3, nodeId3 ) =
+                    mergeBDDs nodeId2 a.elseB b.elseB op dict2
+
+                node =
+                    Node { id = nodeId3, thenB = lBdd, var = a.var, elseB = rBdd }
+            in
+            ( node, insert ( a.id, b.id, op ) (Ref { id = nodeId3, bdd = node }) dict3, nodeId3 + 1 )
+    in
+    case ( tree1, tree2 ) of
+        ( Zero, _ ) ->
+            case op of
+                And ->
+                    ( Zero, dict1, nodeId )
+
+                Or ->
+                    ( tree2, dict1, nodeId )
+
+        ( _, Zero ) ->
+            case op of
+                And ->
+                    ( Zero, dict1, nodeId )
+
+                Or ->
+                    ( tree1, dict1, nodeId )
+
+        ( One, _ ) ->
+            case op of
+                And ->
+                    ( tree2, dict1, nodeId )
+
+                Or ->
+                    ( One, dict1, nodeId )
+
+        ( _, One ) ->
+            case op of
+                And ->
+                    ( tree1, dict1, nodeId )
+
+                Or ->
+                    ( One, dict1, nodeId )
+
+        ( Ref a, Ref b ) ->
+            case get ( a.id, b.id, op ) dict1 of
+                Just refNode ->
+                    ( refNode, dict1, nodeId )
+
+                Nothing ->
+                    mergeBDDs nodeId a.bdd b.bdd op dict1
+
+        ( Ref a, b ) ->
+            mergeBDDs nodeId a.bdd b op dict1
+
+        ( a, Ref b ) ->
+            mergeBDDs nodeId a b.bdd op dict1
+
+        ( Node a, Node b ) ->
+            applyNonRefs a b dict1
 
 
 {-| Creates a BDD by applying a binary operation to two BDD's.
 -}
 apply : BDD -> BDD -> Op -> Dict ( NodeId, NodeId, Int ) BDD -> ( BDD, Dict ( NodeId, NodeId, Int ) BDD )
 apply tree1 tree2 op dict1 =
-    let
-        applyNonRefs a b dict =
-            let
-                ( lBdd, dict2 ) =
-                    apply a.thenB b.thenB op dict1
-
-                ( rBdd, dict3 ) =
-                    apply a.elseB b.elseB op dict2
-
-                node =
-                    Node { id = a.id, thenB = lBdd, var = a.var, elseB = rBdd }
-            in
-            ( node, insert ( a.id, b.id, op ) (Ref { id = a.id, bdd = node }) dict3 )
-    in
-    case ( tree1, tree2 ) of
-        ( Zero, _ ) ->
-            case op of
-                And ->
-                    ( Zero, dict1 )
-
-                Or ->
-                    ( tree2, dict1 )
-
-        ( _, Zero ) ->
-            case op of
-                And ->
-                    ( Zero, dict1 )
-
-                Or ->
-                    ( tree1, dict1 )
-
-        ( One, _ ) ->
-            case op of
-                And ->
-                    ( tree2, dict1 )
-
-                Or ->
-                    ( One, dict1 )
-
-        ( _, One ) ->
-            case op of
-                And ->
-                    ( tree1, dict1 )
-
-                Or ->
-                    ( One, dict1 )
-
-        ( Ref a, Ref b ) ->
-            case get ( a.id, b.id, op ) dict1 of
-                Just refNode ->
-                    ( refNode, dict1 )
-
-                Nothing ->
-                    apply a.bdd b.bdd op dict1
-
-        ( Ref a, b ) ->
-            apply a.bdd b op dict1
-
-        ( a, Ref b ) ->
-            apply a b.bdd op dict1
-
-        ( Node a, Node b ) ->
-            applyNonRefs a b dict1
+    case mergeBDDs 0 tree1 tree2 op dict1 of
+        ( bdd, dict, id ) ->
+            ( bdd, dict )
 
 
 {-| Uses apply to create a single BDD from a JoinTree.
