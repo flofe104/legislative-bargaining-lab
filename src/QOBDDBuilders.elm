@@ -1,7 +1,9 @@
 module QOBDDBuilders exposing
     ( LookUpTables
     , NInfo
+    , NodeLookUpTable
     , apply
+    , apply_
     , build
     , buildQOBDD
     , buildRec
@@ -28,6 +30,10 @@ type alias NInfo =
 -}
 type alias LookUpTables =
     Dict PlayerId (List NInfo)
+
+
+type alias NodeLookUpTable =
+    Dict ( NodeId, PlayerId, NodeId ) BDD
 
 
 {-| The function tries to find a sub-tree for player i that has already
@@ -138,79 +144,107 @@ insert ( node1, node2, op ) bdd =
     Dict.insert ( node1, node2, op2Int op ) bdd
 
 
-mergeBDDs : Int -> BDD -> BDD -> Op -> Dict ( NodeId, NodeId, Int ) BDD -> ( BDD, Dict ( NodeId, NodeId, Int ) BDD, Int )
-mergeBDDs nodeId tree1 tree2 op dict1 =
+bddId : BDD -> Int
+bddId bdd =
+    case bdd of
+        Zero ->
+            -2
+
+        One ->
+            -1
+
+        Node n ->
+            n.id
+
+        Ref r ->
+            r.id
+
+
+apply_ : Int -> BDD -> BDD -> Op -> NodeLookUpTable -> Dict ( NodeId, NodeId, Int ) BDD -> ( BDD, ( NodeLookUpTable, Dict ( NodeId, NodeId, Int ) BDD ), Int )
+apply_ nodeId tree1 tree2 op nodeDict1 dict1 =
     let
-        applyNonRefs a b dict =
+        applyNonRefs a b nodeDict dict =
             let
-                ( lBdd, dict2, nodeId2 ) =
-                    mergeBDDs nodeId a.thenB b.thenB op dict
+                ( lBdd, ( nodeDict2, dict2 ), nodeId2 ) =
+                    apply_ nodeId a.thenB b.thenB op nodeDict dict
 
-                ( rBdd, dict3, nodeId3 ) =
-                    mergeBDDs nodeId2 a.elseB b.elseB op dict2
+                ( rBdd, ( nodeDict3, dict3 ), nodeId3 ) =
+                    apply_ nodeId2 a.elseB b.elseB op nodeDict2 dict2
 
-                node =
-                    Node { id = nodeId3, thenB = lBdd, var = a.var, elseB = rBdd }
+                ( node, ( nodeDict4, dict4 ), nodeId4 ) =
+                    case Dict.get ( bddId lBdd, a.var, bddId rBdd ) nodeDict3 of
+                        Just ref ->
+                            ( ref, ( nodeDict3, dict3 ), nodeId3 )
+
+                        Nothing ->
+                            let
+                                newNode =
+                                    Node { id = nodeId3, thenB = lBdd, var = a.var, elseB = rBdd }
+
+                                ref =
+                                    Ref { id = nodeId3, bdd = newNode }
+                            in
+                            ( newNode, ( Dict.insert ( bddId lBdd, a.var, bddId rBdd ) ref nodeDict3, insert ( a.id, b.id, op ) ref dict3 ), nodeId3 + 1 )
             in
-            ( node, insert ( a.id, b.id, op ) (Ref { id = nodeId3, bdd = node }) dict3, nodeId3 + 1 )
+            ( node, ( nodeDict4, dict4 ), nodeId4 )
     in
     case ( tree1, tree2 ) of
         ( Zero, _ ) ->
             case op of
                 And ->
-                    ( Zero, dict1, nodeId )
+                    ( Zero, ( nodeDict1, dict1 ), nodeId )
 
                 Or ->
-                    ( tree2, dict1, nodeId )
+                    ( tree2, ( nodeDict1, dict1 ), nodeId )
 
         ( _, Zero ) ->
             case op of
                 And ->
-                    ( Zero, dict1, nodeId )
+                    ( Zero, ( nodeDict1, dict1 ), nodeId )
 
                 Or ->
-                    ( tree1, dict1, nodeId )
+                    ( tree1, ( nodeDict1, dict1 ), nodeId )
 
         ( One, _ ) ->
             case op of
                 And ->
-                    ( tree2, dict1, nodeId )
+                    ( tree2, ( nodeDict1, dict1 ), nodeId )
 
                 Or ->
-                    ( One, dict1, nodeId )
+                    ( One, ( nodeDict1, dict1 ), nodeId )
 
         ( _, One ) ->
             case op of
                 And ->
-                    ( tree1, dict1, nodeId )
+                    ( tree1, ( nodeDict1, dict1 ), nodeId )
 
                 Or ->
-                    ( One, dict1, nodeId )
+                    ( One, ( nodeDict1, dict1 ), nodeId )
 
         ( Ref a, Ref b ) ->
             case get ( a.id, b.id, op ) dict1 of
                 Just refNode ->
-                    ( refNode, dict1, nodeId )
+                    ( refNode, ( nodeDict1, dict1 ), nodeId )
 
                 Nothing ->
-                    mergeBDDs nodeId a.bdd b.bdd op dict1
+                    apply_ nodeId a.bdd b.bdd op nodeDict1 dict1
 
         ( Ref a, b ) ->
-            mergeBDDs nodeId a.bdd b op dict1
+            apply_ nodeId a.bdd b op nodeDict1 dict1
 
         ( a, Ref b ) ->
-            mergeBDDs nodeId a b.bdd op dict1
+            apply_ nodeId a b.bdd op nodeDict1 dict1
 
         ( Node a, Node b ) ->
-            applyNonRefs a b dict1
+            applyNonRefs a b nodeDict1 dict1
 
 
 {-| Creates a BDD by applying a binary operation to two BDD's.
 -}
 apply : BDD -> BDD -> Op -> Dict ( NodeId, NodeId, Int ) BDD -> ( BDD, Dict ( NodeId, NodeId, Int ) BDD )
 apply tree1 tree2 op dict1 =
-    case mergeBDDs 0 tree1 tree2 op dict1 of
-        ( bdd, dict, id ) ->
+    case apply_ 0 tree1 tree2 op Dict.empty dict1 of
+        ( bdd, ( nodeDict, dict ), id ) ->
             ( bdd, dict )
 
 
