@@ -21,7 +21,7 @@ readMergeBDDs jTree players rules =
         BinOp op tree1 tree2 ->
             case ( joinTree tree1 players rules, joinTree tree2 players rules ) of
                 ( Just left, Just right ) ->
-                    Just (apply_ (\s -> ( Data left op right, s )) (ApplyState { nDict = Dict.empty, aDict = Dict.empty, id = 0 }))
+                    Just (apply_ (Data left op right) (ApplyState { nDict = Dict.empty, aDict = Dict.empty, id = 0 }))
 
                 _ ->
                     Nothing

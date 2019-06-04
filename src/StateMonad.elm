@@ -20,14 +20,9 @@ andThen h f =
         g newState
 
 
-set : State s a -> b -> State s b
-set h b =
-    \s ->
-        let
-            ( a, s2 ) =
-                h s
-        in
-        ( b, s2 )
+set : b -> State s b
+set b s =
+    ( b, s )
 
 
 return : a -> State s a
