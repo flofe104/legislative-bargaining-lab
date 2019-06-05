@@ -1,4 +1,4 @@
-module StateMonad exposing (State, andThen, return, set)
+module StateMonad exposing (State, andThen, return)
 
 --type alias
 
@@ -20,11 +20,6 @@ andThen h f =
         g newState
 
 
-set : b -> State s b
-set b s =
-    ( b, s )
-
-
 return : a -> State s a
-return x =
-    \s -> ( x, s )
+return =
+    Tuple.pair
