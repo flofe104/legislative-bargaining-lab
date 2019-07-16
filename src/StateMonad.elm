@@ -1,4 +1,4 @@
-module StateMonad exposing (State, andThen, return)
+module StateMonad exposing (State, andThen, get, put, return)
 
 --type alias
 
@@ -18,6 +18,16 @@ andThen h f =
                 f a
         in
         g newState
+
+
+get : State s s
+get s =
+    ( s, s )
+
+
+put : s -> State s ()
+put s =
+    \_ -> ( (), s )
 
 
 return : a -> State s a

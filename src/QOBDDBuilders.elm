@@ -1,6 +1,5 @@
 module QOBDDBuilders exposing
-    ( ApplyData(..)
-    , ApplyState(..)
+    ( ApplyState(..)
     , LookUpTables
     , NInfo
     , NodeLookUpTable
@@ -17,7 +16,7 @@ module QOBDDBuilders exposing
 import Dict exposing (Dict)
 import QOBDD exposing (..)
 import SimpleGame exposing (..)
-import StateMonad exposing (State, andThen, return)
+import StateMonad exposing (State, andThen, get, put, return)
 
 
 {-| x is the smallest weight in the winning coalition of a node. If all coalitions are winning is
@@ -175,90 +174,96 @@ type ApplyState
     = ApplyState { nDict : NodeLookUpTable, aDict : ApplyLookUpTable, id : Int }
 
 
-type ApplyData
-    = Data BDD Op BDD
-
-
-apply_ : ApplyData -> State ApplyState BDD
-apply_ (Data tree1 op tree2) (ApplyState state) =
+apply_ : BDD -> Op -> BDD -> State ApplyState BDD
+apply_ tree1 op tree2 =
     let
         applyNonRefs a b =
-            let
-                ( lBdd, stateL ) =
-                    andThen (\s2 -> ( Data a.thenB op b.thenB, s2 )) apply_ (ApplyState state)
+            andThen (apply_ a.thenB op b.thenB)
+                --`andThen`
+                (\lBdd ->
+                    andThen (apply_ a.elseB op b.elseB)
+                        --`andThen`
+                        (\rBdd ->
+                            andThen StateMonad.get
+                                --`andThen`
+                                (\(ApplyState s) ->
+                                    case Dict.get ( bddId lBdd, a.var, bddId rBdd ) s.nDict of
+                                        Just ref ->
+                                            return ref
 
-                ( rBdd, ApplyState stateR ) =
-                    andThen (\s2 -> ( Data a.elseB op b.elseB, s2 )) apply_ stateL
+                                        Nothing ->
+                                            let
+                                                newNode =
+                                                    Node { id = s.id, thenB = lBdd, var = a.var, elseB = rBdd }
 
-                ( bdd, state2 ) =
-                    case Dict.get ( bddId lBdd, a.var, bddId rBdd ) stateR.nDict of
-                        Just ref ->
-                            ( ref, ApplyState stateR )
-
-                        Nothing ->
-                            let
-                                newNode =
-                                    Node { id = stateR.id, thenB = lBdd, var = a.var, elseB = rBdd }
-
-                                ref =
-                                    Ref { id = stateR.id, bdd = newNode }
-                            in
-                            ( newNode
-                            , ApplyState
-                                { nDict = Dict.insert ( bddId lBdd, a.var, bddId rBdd ) ref stateR.nDict
-                                , aDict = insert ( a.id, b.id, op ) ref stateR.aDict
-                                , id = stateR.id + 1
-                                }
-                            )
-            in
-            ( bdd, state2 )
+                                                ref =
+                                                    Ref { id = s.id, bdd = newNode }
+                                            in
+                                            andThen
+                                                (put
+                                                    (ApplyState
+                                                        { nDict = Dict.insert ( bddId lBdd, a.var, bddId rBdd ) ref s.nDict
+                                                        , aDict = insert ( a.id, b.id, op ) ref s.aDict
+                                                        , id = s.id + 1
+                                                        }
+                                                    )
+                                                )
+                                                --`andThen`
+                                                (\_ -> return newNode)
+                                )
+                        )
+                )
     in
     case ( tree1, tree2 ) of
         ( Zero, _ ) ->
             case op of
                 And ->
-                    return Zero (ApplyState state)
+                    return Zero
 
                 Or ->
-                    return tree2 (ApplyState state)
+                    return tree2
 
         ( _, Zero ) ->
             case op of
                 And ->
-                    return Zero (ApplyState state)
+                    return Zero
 
                 Or ->
-                    return tree1 (ApplyState state)
+                    return tree1
 
         ( One, _ ) ->
             case op of
                 And ->
-                    return tree2 (ApplyState state)
+                    return tree2
 
                 Or ->
-                    return One (ApplyState state)
+                    return One
 
         ( _, One ) ->
             case op of
                 And ->
-                    return tree1 (ApplyState state)
+                    return tree1
 
                 Or ->
-                    return One (ApplyState state)
+                    return One
 
         ( Ref a, Ref b ) ->
-            case get ( a.id, b.id, op ) state.aDict of
-                Just refNode ->
-                    return refNode (ApplyState state)
+            andThen StateMonad.get
+                --`andThen`
+                (\(ApplyState s) ->
+                    case Dict.get ( a.id, b.id, op2Int op ) s.aDict of
+                        Just refNode ->
+                            return refNode
 
-                Nothing ->
-                    andThen (\s2 -> ( Data a.bdd op b.bdd, s2 )) apply_ (ApplyState state)
+                        Nothing ->
+                            apply_ a.bdd op b.bdd
+                )
 
         ( Ref a, b ) ->
-            andThen (\s2 -> ( Data a.bdd op b, s2 )) apply_ (ApplyState state)
+            apply_ a.bdd op b
 
         ( a, Ref b ) ->
-            andThen (\s2 -> ( Data a op b.bdd, s2 )) apply_ (ApplyState state)
+            apply_ a op b.bdd
 
         ( Node a, Node b ) ->
             applyNonRefs a b
@@ -268,7 +273,7 @@ apply_ (Data tree1 op tree2) (ApplyState state) =
 -}
 apply : BDD -> BDD -> Op -> Dict ( NodeId, NodeId, Int ) BDD -> ( BDD, Dict ( NodeId, NodeId, Int ) BDD )
 apply tree1 tree2 op dict1 =
-    case apply_ (Data tree1 op tree2) (ApplyState { nDict = dict1, aDict = Dict.empty, id = 0 }) of
+    case apply_ tree1 op tree2 (ApplyState { nDict = dict1, aDict = Dict.empty, id = 0 }) of
         ( bdd, ApplyState state ) ->
             ( bdd, state.nDict )
 

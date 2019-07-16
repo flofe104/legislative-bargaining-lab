@@ -3,7 +3,7 @@ module JoinTreeTestHelper exposing (displayMerge, mergeCorrectIdGame, mergeToRef
 import BargainLab exposing (..)
 import Dict exposing (Dict)
 import QOBDD exposing (BDD(..), NodeId)
-import QOBDDBuilders exposing (ApplyData(..), ApplyState(..), NodeLookUpTable, apply, apply_, joinTree)
+import QOBDDBuilders exposing (ApplyState(..), NodeLookUpTable, apply, apply_, joinTree)
 import SimpleGame exposing (..)
 
 
@@ -21,7 +21,7 @@ readMergeBDDs jTree players rules =
         BinOp op tree1 tree2 ->
             case ( joinTree tree1 players rules, joinTree tree2 players rules ) of
                 ( Just left, Just right ) ->
-                    Just (apply_ (Data left op right) (ApplyState { nDict = Dict.empty, aDict = Dict.empty, id = 0 }))
+                    Just (apply_ left op right (ApplyState { nDict = Dict.empty, aDict = Dict.empty, id = 0 }))
 
                 _ ->
                     Nothing
