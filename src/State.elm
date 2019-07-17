@@ -1,6 +1,4 @@
-module StateMonad exposing (State, andThen, get, put, return)
-
---type alias
+module State exposing (State, andThen, get, put, return)
 
 
 type alias State s a =

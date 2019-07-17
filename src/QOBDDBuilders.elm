@@ -16,7 +16,7 @@ module QOBDDBuilders exposing
 import Dict exposing (Dict)
 import QOBDD exposing (..)
 import SimpleGame exposing (..)
-import StateMonad exposing (State, andThen, get, put, return)
+import State exposing (State, andThen, get, put, return)
 
 
 {-| x is the smallest weight in the winning coalition of a node. If all coalitions are winning is
@@ -184,7 +184,7 @@ apply_ tree1 op tree2 =
                     andThen (apply_ a.elseB op b.elseB)
                         --`andThen`
                         (\rBdd ->
-                            andThen StateMonad.get
+                            andThen State.get
                                 --`andThen`
                                 (\(ApplyState s) ->
                                     case Dict.get ( bddId lBdd, a.var, bddId rBdd ) s.nDict of
@@ -248,7 +248,7 @@ apply_ tree1 op tree2 =
                     return One
 
         ( Ref a, Ref b ) ->
-            andThen StateMonad.get
+            andThen State.get
                 --`andThen`
                 (\(ApplyState s) ->
                     case Dict.get ( a.id, b.id, op2Int op ) s.aDict of
