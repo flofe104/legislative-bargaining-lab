@@ -10,14 +10,25 @@ import SimpleGame exposing (..)
 import Test exposing (..)
 
 
+testBuildRec :
+    Quota
+    -> List PlayerWeight
+    -> List Player
+    -> ( Int, NInfo, LookUpTables )
+testBuildRec quota ps ws =
+    case QOBDDBuilders.buildRec_ quota ps ws (QOBDDBuilders.BuildRecState { table = Dict.empty, id = 0 }) of
+        ( i, QOBDDBuilders.BuildRecState s ) ->
+            ( s.id, i, s.table )
+
+
 empty : Test
 empty =
     describe "empty game"
         [ describe "empty"
             [ test "losing" <|
-                \_ -> Expect.equal (buildRec 0 1 [] [] Dict.empty) ( 0, NInfo Zero 0 inf, Dict.empty )
+                \_ -> Expect.equal (testBuildRec 1 [] []) ( 0, NInfo Zero 0 inf, Dict.empty )
             , test "winning" <|
-                \_ -> Expect.equal (buildRec 0 0 [] [] Dict.empty) ( 0, NInfo One ninf 0, Dict.empty )
+                \_ -> Expect.equal (testBuildRec 0 [] []) ( 0, NInfo One ninf 0, Dict.empty )
             ]
         ]
 
@@ -27,11 +38,11 @@ simple =
     describe "simpleGame"
         [ describe "OnePlayer"
             [ test "Losing" <|
-                \_ -> Expect.equal (buildRec 0 2 [ 1 ] [ Player "a" 0 ] Dict.empty) ( 1, { v = Node { elseB = Zero, id = 0, thenB = Zero, var = 0 }, x = 1, y = inf }, onePlayerLosingDictionary )
+                \_ -> Expect.equal (testBuildRec 2 [ 1 ] [ Player "a" 0 ]) ( 1, { v = Node { elseB = Zero, id = 0, thenB = Zero, var = 0 }, x = 1, y = inf }, onePlayerLosingDictionary )
             , test "Depending" <|
-                \_ -> Expect.equal (buildRec 0 1 [ 1 ] [ Player "a" 0 ] Dict.empty) ( 1, { v = Node { elseB = Zero, id = 0, thenB = One, var = 0 }, x = 0, y = 1 }, onePlayerPendingDictionary )
+                \_ -> Expect.equal (testBuildRec 1 [ 1 ] [ Player "a" 0 ]) ( 1, { v = Node { elseB = Zero, id = 0, thenB = One, var = 0 }, x = 0, y = 1 }, onePlayerPendingDictionary )
             , test "Winning" <|
-                \_ -> Expect.equal (buildRec 0 0 [ 1 ] [ Player "a" 0 ] Dict.empty) ( 1, { v = Node { elseB = One, id = 0, thenB = One, var = 0 }, x = ninf, y = 0 }, onePlayerWinningDictionary )
+                \_ -> Expect.equal (testBuildRec 0 [ 1 ] [ Player "a" 0 ]) ( 1, { v = Node { elseB = One, id = 0, thenB = One, var = 0 }, x = ninf, y = 0 }, onePlayerWinningDictionary )
             ]
 
         {- , describe "TwoPlayer"

@@ -1,5 +1,6 @@
 module QOBDDBuilders exposing
     ( ApplyState(..)
+    , BuildRecState(..)
     , LookUpTables
     , NInfo
     , NodeLookUpTable
@@ -8,6 +9,7 @@ module QOBDDBuilders exposing
     , build
     , buildQOBDD
     , buildRec
+    , buildRec_
     , insert
     , joinTree
     , lookup
@@ -16,7 +18,7 @@ module QOBDDBuilders exposing
 import Dict exposing (Dict)
 import QOBDD exposing (..)
 import SimpleGame exposing (..)
-import State exposing (State, andThen, get, put, return)
+import State exposing (State)
 
 
 {-| x is the smallest weight in the winning coalition of a node. If all coalitions are winning is
@@ -67,53 +69,88 @@ insert2 tables playerId nodeInfo =
             Dict.insert playerId (nodeInfo :: table) tables
 
 
-{-| The function is used to build a single BDD.
--}
+type BuildRecState
+    = BuildRecState { table : LookUpTables, id : Int }
+
+
 buildRec :
-    NodeId
-    -> Quota
+    Quota
     -> List PlayerWeight
     -> List Player
-    -> LookUpTables
-    -> ( NodeId, NInfo, LookUpTables )
-buildRec nodeId1 quota weights players tables1 =
+    -> NInfo
+buildRec quota weights players =
+    Tuple.first <| buildRec_ quota weights players (BuildRecState { table = Dict.empty, id = 0 })
+
+
+{-| The function is used to build a single BDD.
+-}
+buildRec_ :
+    Quota
+    -> List PlayerWeight
+    -> List Player
+    -> State BuildRecState NInfo
+buildRec_ quota weights players =
     case ( weights, players ) of
         ( w :: ws, p :: ps ) ->
-            case lookup tables1 p.id quota of
-                Just nodeInfo ->
-                    ( nodeId1, nodeInfo, tables1 )
+            State.andThen State.get
+                --`andThen`
+                (\(BuildRecState s) ->
+                    case lookup s.table p.id quota of
+                        Just nodeInfo ->
+                            State.return nodeInfo
 
-                Nothing ->
-                    let
-                        ( nodeId2, infoT, tables2 ) =
-                            buildRec nodeId1 (quota - w) ws ps tables1
+                        Nothing ->
+                            State.andThen (buildRec_ (quota - w) ws ps)
+                                --`andThen`
+                                (\infoT ->
+                                    State.andThen (buildRec_ quota ws ps)
+                                        --`andThen`
+                                        (\infoE ->
+                                            State.andThen State.get
+                                                (\(BuildRecState s2) ->
+                                                    let
+                                                        {- ( nodeId2, infoT, tables2 ) =
+                                                               buildRec nodeId1 (quota - w) ws ps tables1
 
-                        ( nodeId3, infoE, tables3 ) =
-                            buildRec nodeId2 quota ws ps tables2
+                                                           ( nodeId3, infoE, tables3 ) =
+                                                               buildRec nodeId2 quota ws ps tables2
+                                                        -}
+                                                        ( x1, y1 ) =
+                                                            ( max (infoT.x + toFloat w) infoE.x, min (infoT.y + toFloat w) infoE.y )
 
-                        ( x1, y1 ) =
-                            ( max (infoT.x + toFloat w) infoE.x, min (infoT.y + toFloat w) infoE.y )
+                                                        node =
+                                                            Node { id = s2.id, thenB = infoT.v, var = p.id, elseB = infoE.v }
 
-                        node =
-                            Node { id = nodeId3, thenB = infoT.v, var = p.id, elseB = infoE.v }
+                                                        info =
+                                                            { v = node, x = x1, y = y1 }
 
-                        info =
-                            { v = node, x = x1, y = y1 }
+                                                        ref =
+                                                            Ref { id = s2.id, bdd = node }
 
-                        ref =
-                            Ref { id = nodeId3, bdd = node }
-
-                        refInfo =
-                            { v = ref, x = x1, y = y1 }
-                    in
-                    ( nodeId3 + 1, info, insert2 tables3 p.id refInfo )
+                                                        refInfo =
+                                                            { v = ref, x = x1, y = y1 }
+                                                    in
+                                                    State.andThen
+                                                        (State.put
+                                                            (BuildRecState
+                                                                { table = insert2 s2.table p.id refInfo
+                                                                , id = s2.id + 1
+                                                                }
+                                                            )
+                                                        )
+                                                        --`andThen`
+                                                        (\_ -> State.return info)
+                                                )
+                                        )
+                                )
+                )
 
         ( _, _ ) ->
             if quota > 0 then
-                ( nodeId1, { v = Zero, x = 0, y = 1 / 0 }, tables1 )
+                State.return { v = Zero, x = 0, y = 1 / 0 }
 
             else
-                ( nodeId1, { v = One, x = -1 / 0, y = 0 }, tables1 )
+                State.return { v = One, x = -1 / 0, y = 0 }
 
 
 op2Int : Op -> Int
@@ -178,18 +215,18 @@ apply_ : BDD -> Op -> BDD -> State ApplyState BDD
 apply_ tree1 op tree2 =
     let
         applyNonRefs a b =
-            andThen (apply_ a.thenB op b.thenB)
+            State.andThen (apply_ a.thenB op b.thenB)
                 --`andThen`
                 (\lBdd ->
-                    andThen (apply_ a.elseB op b.elseB)
+                    State.andThen (apply_ a.elseB op b.elseB)
                         --`andThen`
                         (\rBdd ->
-                            andThen State.get
+                            State.andThen State.get
                                 --`andThen`
                                 (\(ApplyState s) ->
                                     case Dict.get ( bddId lBdd, a.var, bddId rBdd ) s.nDict of
                                         Just ref ->
-                                            return ref
+                                            State.return ref
 
                                         Nothing ->
                                             let
@@ -199,8 +236,8 @@ apply_ tree1 op tree2 =
                                                 ref =
                                                     Ref { id = s.id, bdd = newNode }
                                             in
-                                            andThen
-                                                (put
+                                            State.andThen
+                                                (State.put
                                                     (ApplyState
                                                         { nDict = Dict.insert ( bddId lBdd, a.var, bddId rBdd ) ref s.nDict
                                                         , aDict = insert ( a.id, b.id, op ) ref s.aDict
@@ -209,7 +246,7 @@ apply_ tree1 op tree2 =
                                                     )
                                                 )
                                                 --`andThen`
-                                                (\_ -> return newNode)
+                                                (\_ -> State.return newNode)
                                 )
                         )
                 )
@@ -218,42 +255,42 @@ apply_ tree1 op tree2 =
         ( Zero, _ ) ->
             case op of
                 And ->
-                    return Zero
+                    State.return Zero
 
                 Or ->
-                    return tree2
+                    State.return tree2
 
         ( _, Zero ) ->
             case op of
                 And ->
-                    return Zero
+                    State.return Zero
 
                 Or ->
-                    return tree1
+                    State.return tree1
 
         ( One, _ ) ->
             case op of
                 And ->
-                    return tree2
+                    State.return tree2
 
                 Or ->
-                    return One
+                    State.return One
 
         ( _, One ) ->
             case op of
                 And ->
-                    return tree1
+                    State.return tree1
 
                 Or ->
-                    return One
+                    State.return One
 
         ( Ref a, Ref b ) ->
-            andThen State.get
+            State.andThen State.get
                 --`andThen`
                 (\(ApplyState s) ->
                     case Dict.get ( a.id, b.id, op2Int op ) s.aDict of
                         Just refNode ->
-                            return refNode
+                            State.return refNode
 
                         Nothing ->
                             apply_ a.bdd op b.bdd
@@ -309,11 +346,7 @@ joinTree jTree players rules =
 -}
 build : RuleMVG -> List Player -> BDD
 build rule players =
-    let
-        ( id, info, tables ) =
-            buildRec 0 rule.quota rule.weights players Dict.empty
-    in
-    info.v
+    (buildRec rule.quota rule.weights players).v
 
 
 {-| Builds a QOBDD based on a single single rule or an entire JoinTree.
