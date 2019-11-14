@@ -69,6 +69,40 @@ insert2 tables playerId nodeInfo =
             Dict.insert playerId (nodeInfo :: table) tables
 
 
+type NodeState
+    = NodeState { nDict : NodeLookUpTable, id : Int }
+
+
+ite : Int -> BDD -> BDD -> State NodeState BDD
+ite i t e =
+    State.andThen State.get
+        --`andThen`
+        (\(NodeState s) ->
+            case Dict.get ( bddId t, i, bddId e ) s.nDict of
+                Nothing ->
+                    let
+                        newNode =
+                            Node { id = s.id, thenB = t, var = i, elseB = e }
+
+                        ref =
+                            Ref { id = s.id, bdd = newNode }
+                    in
+                    State.andThen
+                        (State.put
+                            (NodeState
+                                { nDict = Dict.insert ( bddId t, i, bddId e ) ref s.nDict
+                                , id = s.id + 1
+                                }
+                            )
+                        )
+                        --`andThen`
+                        (\_ -> State.return newNode)
+
+                Just ref ->
+                    State.return ref
+        )
+
+
 type BuildRecState
     = BuildRecState { table : LookUpTables, id : Int }
 
